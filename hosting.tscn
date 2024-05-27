@@ -1,0 +1,31 @@
+[gd_scene load_steps=2 format=3 uid="uid://b1w5g8yslbbro"]
+
+[ext_resource type="Script" path="res://hosting.gd" id="1_ot62p"]
+
+[node name="Control" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_ot62p")
+
+[node name="Button_Cancel" type="Button" parent="."]
+layout_mode = 0
+offset_left = 10.0
+offset_top = 8.0
+offset_right = 242.0
+offset_bottom = 79.0
+text = "Cancel"
+
+[node name="Text_Edit_Status" type="TextEdit" parent="."]
+layout_mode = 0
+offset_left = 249.0
+offset_top = 5.0
+offset_right = 559.0
+offset_bottom = 644.0
+text = "Awaiting connection requests
+"
+editable = false
+wrap_mode = 1
