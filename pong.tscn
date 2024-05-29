@@ -1,0 +1,18 @@
+[gd_scene load_steps=2 format=3 uid="uid://gt0yeoiphjtp"]
+
+[ext_resource type="Script" path="res://pong.gd" id="1_gmm7u"]
+
+[node name="Node2D" type="Node2D"]
+script = ExtResource("1_gmm7u")
+
+[node name="Label_Timer" type="Label" parent="."]
+offset_left = 585.0
+offset_right = 604.0
+offset_bottom = 23.0
+text = "99"
+horizontal_alignment = 1
+
+[node name="Label_Latency" type="Label" parent="."]
+offset_right = 40.0
+offset_bottom = 23.0
+text = "0 ms"
