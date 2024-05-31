@@ -6,16 +6,17 @@ var Text_Edit_Status : TextEdit;
 var timeout_timer : float = Time.get_unix_time_from_system() + 10;
 var timer : float;
 var timer_number : int;
+var transscenic : Node;
 
 # Called when the node enters the scene tree for the first time.
 func _ready():
-	UDP.connect_to_host($"/root/Transscenic_Variables".peer_address,
-	$"/root/Transscenic_Variables".network_port);
+	transscenic = $"/root/Transscenic_Variables";
+	UDP.connect_to_host(transscenic.peer_address,
+	transscenic.network_port);
 	Text_Edit_Status = $Text_Edit_Status;
 	Text_Edit_Status.text = "Attempting to connect. Giving up if no connection is made in 10 seconds\n";
 
-# Called every frame. 'delta' is the elapsed time since the previous frame.
-func _process(_delta):
+func _physics_process(_delta):
 	var current_time : float = Time.get_unix_time_from_system();
 	
 	if ((current_time >= timeout_timer) && !has_received_start_confirmation):
@@ -33,6 +34,8 @@ func _process(_delta):
 		return;
 		
 	if current_time >= time_to_start:
+		transscenic.connection = UDP;
+		transscenic.is_host = false;
 		get_tree().change_scene_to_file("res://pong.tscn");
 		
 	if current_time >= timer:

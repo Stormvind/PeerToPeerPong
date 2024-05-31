@@ -6,12 +6,14 @@ var has_received_start_request : bool = false;
 var time_to_start : float;
 var timer : float;
 var timer_number : int = 4;
+var transscenic : Node;
 
 # Called when the node enters the scene tree for the first time.
 func _ready():
+	transscenic = $"/root/Transscenic_Variables";
 	Text_Edit_Status = $Text_Edit_Status;
 	$Button_Cancel.pressed.connect(func(): get_tree().change_scene_to_file("res://start_menu.tscn"));
-	server.listen($"/root/Transscenic_Variables".network_port);
+	server.listen(transscenic.network_port);
 	Text_Edit_Status.text = "Awaiting connection requests\n";
 	
 # Called every frame. 'delta' is the elapsed time since the previous frame.
@@ -33,6 +35,9 @@ func _physics_process(_delta):
 		timer = current_time;
 			
 	if current_time >= time_to_start:
+		transscenic.server = server;
+		transscenic.connection = peer;
+		transscenic.is_host = true;
 		get_tree().change_scene_to_file("res://pong.tscn");
 	# Sends confirmation of which time to start at
 	peer.put_var(time_to_start);
