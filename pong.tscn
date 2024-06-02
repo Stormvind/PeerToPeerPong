@@ -15,4 +15,4 @@ horizontal_alignment = 1
 [node name="Label_Latency" type="Label" parent="."]
 offset_right = 40.0
 offset_bottom = 23.0
-text = "0 ms"
+text = "latency"
