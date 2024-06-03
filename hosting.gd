@@ -12,7 +12,9 @@ var transscenic : Node;
 func _ready():
 	transscenic = $"/root/Transscenic_Variables";
 	Text_Edit_Status = $Text_Edit_Status;
-	$Button_Cancel.pressed.connect(func(): get_tree().change_scene_to_file("res://start_menu.tscn"));
+	$Button_Cancel.pressed.connect(func():
+		server.stop();
+		get_tree().change_scene_to_file("res://start_menu.tscn"));
 	server.listen(transscenic.network_port);
 	Text_Edit_Status.text = "Awaiting connection requests\n";
 	

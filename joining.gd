@@ -20,6 +20,7 @@ func _physics_process(_delta):
 	var current_time : float = Time.get_unix_time_from_system();
 	
 	if ((current_time >= timeout_timer) && !has_received_start_confirmation):
+		UDP.close();
 		get_tree().change_scene_to_file("res://start_menu.tscn");
 		
 	if !has_received_start_confirmation:
