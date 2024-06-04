@@ -6,6 +6,13 @@ var current_frame : int = 1;
 var latest_100_latencies : Array = [];
 var average_latency : int = 0;
 var label_latency : Label;
+# A value of 5 means that every fifth frame, the computer that's ahead of the other
+# is allowed to pause for a frame to synchronise
+var synchronisation_interval : int = 5;
+var local_frame_aheadness : int = 0;
+var latest_integral_frame : int = 0;
+var gamestate = {"local_position" : 299, "remote_position" : 299};
+var saved_gamestate = {"local_position" : 299, "remote_position" : 299};
 
 # Called when the node enters the scene tree for the first time.
 func _ready():
@@ -21,8 +28,20 @@ func _ready():
 		};
 	RenderingServer.set_default_clear_color(Color(0,0,0))
 	transscenic = $"/root/Transscenic_Variables";
+	
+func _draw() -> void:
+	# Draw local player
+	draw_rect(Rect2(Vector2(25, gamestate.local_position), Vector2(25, 50)), Color.DARK_CYAN);
+	# Draw remote player
+	draw_rect(Rect2(Vector2(1102, gamestate.remote_position), Vector2(25, 50)), Color.DARK_MAGENTA);
 
 func _physics_process(_delta):
+	# If ahead of the other computer, pause every fifth frame to synchronise
+	if local_frame_aheadness > 0 \
+	and current_frame % (synchronisation_interval + 1) == synchronisation_interval:
+		local_frame_aheadness -= 1;
+		return;
+		
 	var current_timestamp : int = Time.get_ticks_msec();
 	# Write local frame
 	archive[current_frame].local.confirmed = true;
@@ -64,9 +83,13 @@ func _physics_process(_delta):
 					"frame" : request.frame
 				});
 				archive[request.frame].remote.confirmed = true;
+				archive[request.frame].remote.frame = request.frame;
 				archive[request.frame].remote.inputs.up = request.inputs.up;
 				archive[request.frame].remote.inputs.down = request.inputs.down;
-				#Roll back here
+				# Determine local frame aheadness
+				local_frame_aheadness = \
+				(current_timestamp - (request.timestamp + average_latency)) / 16.667;
+				# Integrate
 			
 	unconfirmed_requests[current_frame] = \
 	{
@@ -80,4 +103,18 @@ func _physics_process(_delta):
 	transscenic.connection.put_var(message_to_send);
 	if current_frame == 60:
 		print(archive[59].remote.inputs);
+	# Update game state for the current frame
+	Process_Frame(current_frame);
+	queue_redraw();
 	current_frame += 1;
+
+func Process_Frame(frame : int) -> void:
+	gamestate.local_position += (9 * int(archive[frame].local.inputs.down)) \
+	- (9 * int(archive[frame].local.inputs.up));
+	
+	gamestate.remote_position += (9 * int(archive[frame].remote.inputs.down)) \
+	- (9 * int(archive[frame].remote.inputs.up));
+
+func Integrate() -> void:
+	pass;
+

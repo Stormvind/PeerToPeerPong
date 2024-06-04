@@ -2,7 +2,7 @@ extends Control
 var Line_Edit_IP_Address : Node;
 
 # Called when the node enters the scene tree for the first time.
-func _ready():		
+func _ready():
 	Line_Edit_IP_Address = $Line_Edit_IP_Address;
 	
 	$Button_Join.pressed.connect(func():
