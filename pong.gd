@@ -30,10 +30,12 @@ func _ready():
 	transscenic = $"/root/Transscenic_Variables";
 	
 func _draw() -> void:
-	# Draw local player
-	draw_rect(Rect2(Vector2(25, gamestate.local_position), Vector2(25, 50)), Color.DARK_CYAN);
-	# Draw remote player
-	draw_rect(Rect2(Vector2(1102, gamestate.remote_position), Vector2(25, 50)), Color.DARK_MAGENTA);
+	if transscenic.is_host == false:
+		draw_rect(Rect2(Vector2(25, gamestate.local_position), Vector2(25, 50)), Color.DARK_CYAN);
+		draw_rect(Rect2(Vector2(1102, gamestate.remote_position), Vector2(25, 50)), Color.DARK_MAGENTA);
+	else:
+		draw_rect(Rect2(Vector2(1102, gamestate.local_position), Vector2(25, 50)), Color.DARK_MAGENTA);
+		draw_rect(Rect2(Vector2(25, gamestate.remote_position), Vector2(25, 50)), Color.DARK_CYAN);
 
 func _physics_process(_delta):
 	# If ahead of the other computer, pause every fifth frame to synchronise
@@ -89,7 +91,9 @@ func _physics_process(_delta):
 				# Determine local frame aheadness
 				local_frame_aheadness = \
 				(current_timestamp - (request.timestamp + average_latency)) / 16.667;
-				# Integrate
+				# If the arrived frame is in the past, integrate
+				if request.frame < current_frame:
+					Integrate();
 			
 	unconfirmed_requests[current_frame] = \
 	{
@@ -116,5 +120,11 @@ func Process_Frame(frame : int) -> void:
 	- (9 * int(archive[frame].remote.inputs.up));
 
 func Integrate() -> void:
-	pass;
-
+	gamestate.local_position = saved_gamestate.local_position;
+	gamestate.remote_position = saved_gamestate.remote_position;
+	for i in range(latest_integral_frame, current_frame + 1):
+		Process_Frame(i);
+		if archive[i].remote.confirmed and archive[i - 1].remote.confirmed:
+			latest_integral_frame = i;
+			saved_gamestate.local_position = gamestate.local_position;
+			saved_gamestate.remote_position = gamestate.remote_position;
