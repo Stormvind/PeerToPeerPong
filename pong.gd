@@ -38,6 +38,7 @@ func _draw() -> void:
 		draw_rect(Rect2(Vector2(25, gamestate.remote_position), Vector2(25, 50)), Color.DARK_CYAN);
 
 func _physics_process(_delta):
+	var message_to_the_past : bool = false;
 	# If ahead of the other computer, pause every fifth frame to synchronise
 	if local_frame_aheadness > 0 \
 	and current_frame % (synchronisation_interval + 1) == synchronisation_interval:
@@ -80,20 +81,18 @@ func _physics_process(_delta):
 		# Process requests
 		for request in received_message.requests:
 			if archive[request.frame].remote.confirmed == false:
+				archive[request.frame].remote.confirmed = true;
+				message_to_the_past = true;
+				archive[request.frame].remote.frame = request.frame;
+				archive[request.frame].remote.inputs.up = request.inputs.up;
+				archive[request.frame].remote.inputs.down = request.inputs.down;
 				message_to_send.confirmations.append({
 					"timestamp" : request.timestamp,
 					"frame" : request.frame
 				});
-				archive[request.frame].remote.confirmed = true;
-				archive[request.frame].remote.frame = request.frame;
-				archive[request.frame].remote.inputs.up = request.inputs.up;
-				archive[request.frame].remote.inputs.down = request.inputs.down;
 				# Determine local frame aheadness
 				local_frame_aheadness = \
 				(current_timestamp - (request.timestamp + average_latency)) / 16.667;
-				# If the arrived frame is in the past, integrate
-				if request.frame < current_frame:
-					Integrate();
 			
 	unconfirmed_requests[current_frame] = \
 	{
@@ -105,26 +104,29 @@ func _physics_process(_delta):
 		message_to_send.requests.append(unconfirmed_requests[key]);
 	# Send requests and confirmations
 	transscenic.connection.put_var(message_to_send);
-	if current_frame == 60:
-		print(archive[59].remote.inputs);
-	# Update game state for the current frame
-	Process_Frame(current_frame);
 	queue_redraw();
+	if message_to_the_past:
+		Integrate();
+	else:
+		Process_Frame(current_frame);
 	current_frame += 1;
 
 func Process_Frame(frame : int) -> void:
-	gamestate.local_position += (9 * int(archive[frame].local.inputs.down)) \
-	- (9 * int(archive[frame].local.inputs.up));
+	gamestate.local_position += (7 * int(archive[frame].local.inputs.down));
+	gamestate.local_position -= (7 * int(archive[frame].local.inputs.up));
 	
-	gamestate.remote_position += (9 * int(archive[frame].remote.inputs.down)) \
-	- (9 * int(archive[frame].remote.inputs.up));
+	gamestate.remote_position += (7 * int(archive[frame].remote.inputs.down));
+	gamestate.remote_position -= (7 * int(archive[frame].remote.inputs.up));
 
 func Integrate() -> void:
 	gamestate.local_position = saved_gamestate.local_position;
 	gamestate.remote_position = saved_gamestate.remote_position;
+	var integral : bool = true;
 	for i in range(latest_integral_frame, current_frame + 1):
 		Process_Frame(i);
-		if archive[i].remote.confirmed and archive[i - 1].remote.confirmed:
+		if archive[i].remote.confirmed == false:
+			integral = false;
+		if integral:
 			latest_integral_frame = i;
 			saved_gamestate.local_position = gamestate.local_position;
 			saved_gamestate.remote_position = gamestate.remote_position;
