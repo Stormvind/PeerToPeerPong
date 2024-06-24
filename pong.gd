@@ -1,11 +1,13 @@
 extends Node2D
+var seconds_left : int = 99;
 var transscenic : Node;
-var archive : Array = [];
+var archive : Dictionary = {};
 var unconfirmed_requests : Dictionary = {};
 var current_frame : int = 1;
 var latest_100_latencies : Array = [];
 var average_latency : int = 0;
 var label_latency : Label;
+var label_timer : Label;
 # A value of 5 means that every fifth frame, the computer that's ahead of the other
 # is allowed to pause for a frame to synchronise
 var synchronisation_interval : int = 5;
@@ -16,10 +18,10 @@ var saved_gamestate = {"local_position" : 299, "remote_position" : 299};
 
 # Called when the node enters the scene tree for the first time.
 func _ready():
+	label_timer = $Label_Timer;
 	label_latency = $Label_Latency;
 	# 5940 frames = 99 seconds
-	archive.resize(5941);
-	for i in range(archive.size()):
+	for i in range(5941):
 		archive[i] = {
 			"local" : {"confirmed" : false, "frame" : 0, "timestamp" : 0,
 			"inputs" : {"up" : false, "down" : false}},
@@ -38,12 +40,16 @@ func _draw() -> void:
 		draw_rect(Rect2(Vector2(25, gamestate.remote_position), Vector2(25, 50)), Color.DARK_CYAN);
 
 func _physics_process(_delta):
-	var message_to_the_past : bool = false;
 	# If ahead of the other computer, pause every fifth frame to synchronise
 	if local_frame_aheadness > 0 \
 	and current_frame % (synchronisation_interval + 1) == synchronisation_interval:
 		local_frame_aheadness -= 1;
 		return;
+	# Update the visual timer once every second
+	if current_frame % 60 == 0:
+		seconds_left -= 1;
+		label_timer.text = str(seconds_left);
+	var message_to_the_past : bool = false;
 		
 	var current_timestamp : int = Time.get_ticks_msec();
 	# Write local frame
@@ -54,7 +60,7 @@ func _physics_process(_delta):
 	archive[current_frame].local.inputs.down = Input.is_action_pressed("down");
 	# Write assumed inputs for opponent
 	archive[current_frame].remote.inputs.down = archive[current_frame - 1].remote.inputs.down;
-	archive[current_frame].remote.inputs.up = archive[current_frame - -1].remote.inputs.up;
+	archive[current_frame].remote.inputs.up = archive[current_frame - 1].remote.inputs.up;
 	
 	if transscenic.is_host:
 		transscenic.server.poll();
@@ -113,10 +119,20 @@ func _physics_process(_delta):
 
 func Process_Frame(frame : int) -> void:
 	gamestate.local_position += (7 * int(archive[frame].local.inputs.down));
+	if gamestate.local_position > 598:
+		gamestate.local_position = 598;
+		
 	gamestate.local_position -= (7 * int(archive[frame].local.inputs.up));
+	if gamestate.local_position < 0:
+		gamestate.local_position = 0;
 	
 	gamestate.remote_position += (7 * int(archive[frame].remote.inputs.down));
+	if gamestate.remote_position > 598:
+		gamestate.remote_position = 598;
+		
 	gamestate.remote_position -= (7 * int(archive[frame].remote.inputs.up));
+	if gamestate.remote_position < 0:
+		gamestate.remote_position = 0;
 
 func Integrate() -> void:
 	gamestate.local_position = saved_gamestate.local_position;
