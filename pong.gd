@@ -20,14 +20,12 @@ var saved_gamestate = {"local_position" : 299, "remote_position" : 299};
 func _ready():
 	label_timer = $Label_Timer;
 	label_latency = $Label_Latency;
-	# 5940 frames = 99 seconds
-	for i in range(5941):
-		archive[i] = {
-			"local" : {"confirmed" : false, "frame" : 0, "timestamp" : 0,
-			"inputs" : {"up" : false, "down" : false}},
-			"remote" : {"confirmed" : false, "frame" : 0, "timestamp" : 0,
-			"inputs" : {"up" : false, "down" : false}}
-		};
+	archive[0] = {
+		"local" : {"confirmed" : false, "frame" : 0, "timestamp" : 0,
+		"inputs" : {"up" : false, "down" : false}},
+		"remote" : {"confirmed" : false, "frame" : 0, "timestamp" : 0,
+		"inputs" : {"up" : false, "down" : false}}
+	};
 	RenderingServer.set_default_clear_color(Color(0,0,0))
 	transscenic = $"/root/Transscenic_Variables";
 	
@@ -53,6 +51,13 @@ func _physics_process(_delta):
 		
 	var current_timestamp : int = Time.get_ticks_msec();
 	# Write local frame
+	if !archive.has(current_frame):
+		archive[current_frame] = \
+		{
+			"local" : { "inputs" : {}},
+			"remote" : { "confirmed" : false, "inputs" : {}}
+		};
+		
 	archive[current_frame].local.confirmed = true;
 	archive[current_frame].local.frame = current_frame;
 	archive[current_frame].local.timestamp = current_timestamp;
@@ -86,20 +91,26 @@ func _physics_process(_delta):
 			label_latency.text = str(average_latency) + " ms";
 		# Process requests
 		for request in received_message.requests:
-			if archive[request.frame].remote.confirmed == false:
-				archive[request.frame].remote.confirmed = true;
+			if !archive.has(request.frame):
+				archive[request.frame] = \
+				{
+					"local" : { "inputs" : {}}, 
+					"remote" : { "inputs" : {}}
+				};
+			archive[request.frame].remote.confirmed = true;
+			if request.frame < current_frame:
 				message_to_the_past = true;
-				archive[request.frame].remote.frame = request.frame;
-				archive[request.frame].remote.inputs.up = request.inputs.up;
-				archive[request.frame].remote.inputs.down = request.inputs.down;
-				message_to_send.confirmations.append({
-					"timestamp" : request.timestamp,
-					"frame" : request.frame
-				});
-				# Determine local frame aheadness
-				local_frame_aheadness = \
-				(current_timestamp - (request.timestamp + average_latency)) / 16.667;
-			
+			archive[request.frame].remote.frame = request.frame;
+			archive[request.frame].remote.inputs.up = request.inputs.up;
+			archive[request.frame].remote.inputs.down = request.inputs.down;
+			message_to_send.confirmations.append({
+				"timestamp" : request.timestamp,
+				"frame" : request.frame
+			});
+			# Determine local frame aheadness
+			local_frame_aheadness = \
+			(current_timestamp - (request.timestamp + average_latency)) / 16.667;
+
 	unconfirmed_requests[current_frame] = \
 	{
 		"frame" : archive[current_frame].local.frame,
@@ -111,11 +122,12 @@ func _physics_process(_delta):
 	# Send requests and confirmations
 	transscenic.connection.put_var(message_to_send);
 	queue_redraw();
-	if message_to_the_past:
+	if message_to_the_past or archive[current_frame].remote.confirmed:
 		Integrate();
 	else:
 		Process_Frame(current_frame);
 	current_frame += 1;
+	Remove_Integrated_From_Archive();
 
 func Process_Frame(frame : int) -> void:
 	gamestate.local_position += (7 * int(archive[frame].local.inputs.down));
@@ -143,6 +155,14 @@ func Integrate() -> void:
 		if archive[i].remote.confirmed == false:
 			integral = false;
 		if integral:
+			print("hello");
 			latest_integral_frame = i;
 			saved_gamestate.local_position = gamestate.local_position;
 			saved_gamestate.remote_position = gamestate.remote_position;
+
+func Remove_Integrated_From_Archive() -> void:
+	for entry in archive:
+		if entry < latest_integral_frame:
+			archive.erase(entry);
+	# Iterate over the archive:
+	# 	If the frame is lower than the latest integral frame, remove its entry from the archive
