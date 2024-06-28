@@ -21,9 +21,9 @@ func _ready():
 	label_timer = $Label_Timer;
 	label_latency = $Label_Latency;
 	archive[0] = {
-		"local" : {"confirmed" : false, "frame" : 0, "timestamp" : 0,
+		"local" : {"frame" : 0, "timestamp" : 0,
 		"inputs" : {"up" : false, "down" : false}},
-		"remote" : {"confirmed" : false, "frame" : 0, "timestamp" : 0,
+		"remote" : {"confirmed" : true, "frame" : 0, "timestamp" : 0,
 		"inputs" : {"up" : false, "down" : false}}
 	};
 	RenderingServer.set_default_clear_color(Color(0,0,0))
@@ -43,10 +43,7 @@ func _physics_process(_delta):
 	and current_frame % (synchronisation_interval + 1) == synchronisation_interval:
 		local_frame_aheadness -= 1;
 		return;
-	# Update the visual timer once every second
-	if current_frame % 60 == 0:
-		seconds_left -= 1;
-		label_timer.text = str(seconds_left);
+	
 	var message_to_the_past : bool = false;
 		
 	var current_timestamp : int = Time.get_ticks_msec();
@@ -58,7 +55,6 @@ func _physics_process(_delta):
 			"remote" : { "confirmed" : false, "inputs" : {}}
 		};
 		
-	archive[current_frame].local.confirmed = true;
 	archive[current_frame].local.frame = current_frame;
 	archive[current_frame].local.timestamp = current_timestamp;
 	archive[current_frame].local.inputs.up = Input.is_action_pressed("up");
@@ -126,8 +122,11 @@ func _physics_process(_delta):
 		Integrate();
 	else:
 		Process_Frame(current_frame);
+	# Update the visual timer once every second
+	if current_frame % 60 == 0:
+		seconds_left -= 1;
+		label_timer.text = str(seconds_left);
 	current_frame += 1;
-	Remove_Integrated_From_Archive();
 
 func Process_Frame(frame : int) -> void:
 	gamestate.local_position += (7 * int(archive[frame].local.inputs.down));
@@ -155,7 +154,6 @@ func Integrate() -> void:
 		if archive[i].remote.confirmed == false:
 			integral = false;
 		if integral:
-			print("hello");
 			latest_integral_frame = i;
 			saved_gamestate.local_position = gamestate.local_position;
 			saved_gamestate.remote_position = gamestate.remote_position;
@@ -164,5 +162,3 @@ func Remove_Integrated_From_Archive() -> void:
 	for entry in archive:
 		if entry < latest_integral_frame:
 			archive.erase(entry);
-	# Iterate over the archive:
-	# 	If the frame is lower than the latest integral frame, remove its entry from the archive
