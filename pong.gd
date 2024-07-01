@@ -118,10 +118,11 @@ func _physics_process(_delta):
 	# Send requests and confirmations
 	transscenic.connection.put_var(message_to_send);
 	queue_redraw();
-	if message_to_the_past or archive[current_frame].remote.confirmed:
-		Integrate();
-	else:
-		Process_Frame(current_frame);
+	#if message_to_the_past or archive[current_frame].remote.confirmed:
+		#Integrate();
+	#else:
+		#Process_Frame(current_frame);
+	Integrate();
 	# Update the visual timer once every second
 	if current_frame % 60 == 0:
 		seconds_left -= 1;
