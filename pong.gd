@@ -1,6 +1,7 @@
 extends Node2D
 var seconds_left : int = 99;
 var transscenic : Node;
+var input_delay : int;
 var archive : Dictionary = {};
 var unconfirmed_requests : Dictionary = {};
 var current_frame : int = 1;
@@ -13,6 +14,8 @@ var label_timer : Label;
 var synchronisation_interval : int = 5;
 var local_frame_aheadness : int = 0;
 var latest_integral_frame : int = 0;
+# The amount of frames before the connection times out and the game ends
+var connection_timeout_amount : int = 120;
 var gamestate = {"local_position" : 299, "remote_position" : 299};
 var saved_gamestate = {"local_position" : 299, "remote_position" : 299};
 
@@ -20,14 +23,16 @@ var saved_gamestate = {"local_position" : 299, "remote_position" : 299};
 func _ready():
 	label_timer = $Label_Timer;
 	label_latency = $Label_Latency;
-	archive[0] = {
-		"local" : {"frame" : 0, "timestamp" : 0,
-		"inputs" : {"up" : false, "down" : false}},
-		"remote" : {"confirmed" : true, "frame" : 0, "timestamp" : 0,
-		"inputs" : {"up" : false, "down" : false}}
-	};
 	RenderingServer.set_default_clear_color(Color(0,0,0))
 	transscenic = $"/root/Transscenic_Variables";
+	input_delay = transscenic.input_delay;
+	for i in range(0, input_delay + 1):
+		archive[i] = {
+			"local" : {"frame" : 0, "timestamp" : 0,
+			"inputs" : {"up" : false, "down" : false}},
+			"remote" : {"confirmed" : true, "frame" : 0, "timestamp" : 0,
+			"inputs" : {"up" : false, "down" : false}}
+		};
 	
 func _draw() -> void:
 	if transscenic.is_host == false:
@@ -43,25 +48,24 @@ func _physics_process(_delta):
 	and current_frame % (synchronisation_interval + 1) == synchronisation_interval:
 		local_frame_aheadness -= 1;
 		return;
-	
-	var message_to_the_past : bool = false;
 		
 	var current_timestamp : int = Time.get_ticks_msec();
 	# Write local frame
-	if !archive.has(current_frame):
-		archive[current_frame] = \
+	if !archive.has(current_frame + input_delay):
+		archive[current_frame + input_delay] = \
 		{
 			"local" : { "inputs" : {}},
 			"remote" : { "confirmed" : false, "inputs" : {}}
 		};
 		
-	archive[current_frame].local.frame = current_frame;
-	archive[current_frame].local.timestamp = current_timestamp;
-	archive[current_frame].local.inputs.up = Input.is_action_pressed("up");
-	archive[current_frame].local.inputs.down = Input.is_action_pressed("down");
+	archive[current_frame + input_delay].local.frame = current_frame + input_delay;
+	archive[current_frame + input_delay].local.timestamp = current_timestamp;
+	archive[current_frame + input_delay].local.inputs.up = Input.is_action_pressed("up");
+	archive[current_frame + input_delay].local.inputs.down = Input.is_action_pressed("down");
 	# Write assumed inputs for opponent
-	archive[current_frame].remote.inputs.down = archive[current_frame - 1].remote.inputs.down;
-	archive[current_frame].remote.inputs.up = archive[current_frame - 1].remote.inputs.up;
+	if archive[current_frame].remote.confirmed == false:
+		archive[current_frame].remote.inputs.down = archive[current_frame - 1].remote.inputs.down;
+		archive[current_frame].remote.inputs.up = archive[current_frame - 1].remote.inputs.up;
 	
 	if transscenic.is_host:
 		transscenic.server.poll();
@@ -94,8 +98,6 @@ func _physics_process(_delta):
 					"remote" : { "inputs" : {}}
 				};
 			archive[request.frame].remote.confirmed = true;
-			if request.frame < current_frame:
-				message_to_the_past = true;
 			archive[request.frame].remote.frame = request.frame;
 			archive[request.frame].remote.inputs.up = request.inputs.up;
 			archive[request.frame].remote.inputs.down = request.inputs.down;
@@ -106,29 +108,30 @@ func _physics_process(_delta):
 			# Determine local frame aheadness
 			local_frame_aheadness = \
 			(current_timestamp - (request.timestamp + average_latency)) / 16.667;
-
-	unconfirmed_requests[current_frame] = \
+	# Add the current frame to the list of unconfirmed requests
+	unconfirmed_requests[current_frame + input_delay] = \
 	{
-		"frame" : archive[current_frame].local.frame,
-		"timestamp" : archive[current_frame].local.timestamp,
-		"inputs" : archive[current_frame].local.inputs
+		"frame" : archive[current_frame + input_delay].local.frame,
+		"timestamp" : archive[current_frame + input_delay].local.timestamp,
+		"inputs" : archive[current_frame + input_delay].local.inputs
 	};
 	for key in unconfirmed_requests:
 		message_to_send.requests.append(unconfirmed_requests[key]);
 	# Send requests and confirmations
 	transscenic.connection.put_var(message_to_send);
-	queue_redraw();
-	#if message_to_the_past or archive[current_frame].remote.confirmed:
-		#Integrate();
-	#else:
-		#Process_Frame(current_frame);
 	Integrate();
 	# Update the visual timer once every second
 	if current_frame % 60 == 0:
 		seconds_left -= 1;
 		label_timer.text = str(seconds_left);
+	queue_redraw();
+	# Check for game end conditions: Connection timeout and draw ending due to game time elapsing
+	if current_frame >= (latest_integral_frame + 120):
+		End_Game("Connection failure");
+	if current_frame >= 5941:
+		End_Game("Draw");
 	current_frame += 1;
-
+# Process a frame by reading its inputs and changing the game state based on them
 func Process_Frame(frame : int) -> void:
 	gamestate.local_position += (7 * int(archive[frame].local.inputs.down));
 	if gamestate.local_position > 598:
@@ -145,7 +148,9 @@ func Process_Frame(frame : int) -> void:
 	gamestate.remote_position -= (7 * int(archive[frame].remote.inputs.up));
 	if gamestate.remote_position < 0:
 		gamestate.remote_position = 0;
-
+# Restore the game state to the latest saved game state, then process all frames from there up to the
+# present. Save a more recent game state if there is an unbroken line of confirmed frames from
+# the latest confirmed frame up until a later point in time
 func Integrate() -> void:
 	gamestate.local_position = saved_gamestate.local_position;
 	gamestate.remote_position = saved_gamestate.remote_position;
@@ -158,8 +163,8 @@ func Integrate() -> void:
 			latest_integral_frame = i;
 			saved_gamestate.local_position = gamestate.local_position;
 			saved_gamestate.remote_position = gamestate.remote_position;
-
-func Remove_Integrated_From_Archive() -> void:
-	for entry in archive:
-		if entry < latest_integral_frame:
-			archive.erase(entry);
+			
+func End_Game(message : String):
+	transscenic.game_over_text = message;
+	get_tree().change_scene_to_file("res://game_over.tscn");
+	
