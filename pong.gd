@@ -9,8 +9,8 @@ var latest_100_latencies : Array = [];
 var average_latency : int = 0;
 var label_latency : Label;
 var label_timer : Label;
-# A value of 5 means that every fifth frame, the computer that's ahead of the other
-# is allowed to pause for a frame to synchronise
+# The higher this value is, the more frames must elapse before the computer
+# that is ahead of the other can again wait for a frame to resynchronise
 var synchronisation_interval : int = 5;
 var local_frame_aheadness : int = 0;
 var latest_integral_frame : int = 0;
@@ -23,15 +23,23 @@ var saved_gamestate = {"local_position" : 299, "remote_position" : 299};
 func _ready():
 	label_timer = $Label_Timer;
 	label_latency = $Label_Latency;
-	RenderingServer.set_default_clear_color(Color(0,0,0))
 	transscenic = $"/root/Transscenic_Variables";
 	input_delay = transscenic.input_delay;
+	var current_timestamp : int = Time.get_ticks_msec();
 	for i in range(0, input_delay + 1):
-		archive[i] = {
-			"local" : {"frame" : 0, "timestamp" : 0,
+		archive[i] = \
+		{
+			"local" : {"frame" : i, "timestamp" : current_timestamp,
 			"inputs" : {"up" : false, "down" : false}},
-			"remote" : {"confirmed" : true, "frame" : 0, "timestamp" : 0,
+			"remote" : {"confirmed" : false, "frame" : i, "timestamp" : 0,
 			"inputs" : {"up" : false, "down" : false}}
+		};
+		unconfirmed_requests[i] = \
+		{
+			"frame" : archive[i].local.frame,
+			"timestamp" : archive[i].local.timestamp,
+			"inputs" : {"down" : archive[i].local.inputs.down,
+						"up" : archive[i].local.inputs.up}
 		};
 	
 func _draw() -> void:
@@ -57,7 +65,7 @@ func _physics_process(_delta):
 			"local" : { "inputs" : {}},
 			"remote" : { "confirmed" : false, "inputs" : {}}
 		};
-		
+
 	archive[current_frame + input_delay].local.frame = current_frame + input_delay;
 	archive[current_frame + input_delay].local.timestamp = current_timestamp;
 	archive[current_frame + input_delay].local.inputs.up = Input.is_action_pressed("up");
@@ -113,7 +121,8 @@ func _physics_process(_delta):
 	{
 		"frame" : archive[current_frame + input_delay].local.frame,
 		"timestamp" : archive[current_frame + input_delay].local.timestamp,
-		"inputs" : archive[current_frame + input_delay].local.inputs
+		"inputs" : {"down" : archive[current_frame + input_delay].local.inputs.down,
+					"up" : archive[current_frame + input_delay].local.inputs.up}
 	};
 	for key in unconfirmed_requests:
 		message_to_send.requests.append(unconfirmed_requests[key]);
@@ -128,7 +137,7 @@ func _physics_process(_delta):
 	# Check for game end conditions: Connection timeout and draw ending due to game time elapsing
 	if current_frame >= (latest_integral_frame + 120):
 		End_Game("Connection failure");
-	if current_frame >= 5941:
+	if current_frame >= 5940:
 		End_Game("Draw");
 	current_frame += 1;
 # Process a frame by reading its inputs and changing the game state based on them
@@ -163,8 +172,11 @@ func Integrate() -> void:
 			latest_integral_frame = i;
 			saved_gamestate.local_position = gamestate.local_position;
 			saved_gamestate.remote_position = gamestate.remote_position;
-			
+
 func End_Game(message : String):
 	transscenic.game_over_text = message;
+	if transscenic.is_host:
+		transscenic.server.stop();
+	transscenic.connection.close();
 	get_tree().change_scene_to_file("res://game_over.tscn");
 	
