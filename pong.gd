@@ -158,8 +158,7 @@ func Process_Frame(frame : int) -> void:
 	if gamestate.remote_position < 0:
 		gamestate.remote_position = 0;
 # Restore the game state to the latest saved game state, then process all frames from there up to the
-# present. Save a more recent game state if there is an unbroken line of confirmed frames from
-# the latest confirmed frame up until a later point in time
+# present. Save a more recent game state if there is an unbroken line of confirmed frames to it
 func Integrate() -> void:
 	gamestate.local_position = saved_gamestate.local_position;
 	gamestate.remote_position = saved_gamestate.remote_position;
