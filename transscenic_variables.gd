@@ -7,3 +7,4 @@ var server : UDPServer;
 var connection : PacketPeerUDP;
 var is_host : bool;
 var game_over_text : String;
+var seed : int;

@@ -16,8 +16,10 @@ var local_frame_aheadness : int = 0;
 var latest_integral_frame : int = 0;
 # The amount of frames before the connection times out and the game ends
 var connection_timeout_amount : int = 120;
-var gamestate = {"local_position" : 299, "remote_position" : 299};
-var saved_gamestate = {"local_position" : 299, "remote_position" : 299};
+var gamestate = {"local_position" : 299, "remote_position" : 299,
+"square_position_x" : 588, "square_position_y" : 312};
+var saved_gamestate = {"local_position" : 299, "remote_position" : 299,
+"square_position_x" : 588, "square_position_y" : 312};
 
 # Called when the node enters the scene tree for the first time.
 func _ready():
@@ -43,6 +45,8 @@ func _ready():
 		};
 	
 func _draw() -> void:
+	draw_rect(Rect2(Vector2(gamestate.square_position_x, gamestate.square_position_y),
+	Vector2(25, 25)), Color.MINT_CREAM);
 	if transscenic.is_host == false:
 		draw_rect(Rect2(Vector2(25, gamestate.local_position), Vector2(25, 50)), Color.DARK_CYAN);
 		draw_rect(Rect2(Vector2(1102, gamestate.remote_position), Vector2(25, 50)), Color.DARK_MAGENTA);
@@ -82,7 +86,11 @@ func _physics_process(_delta):
 	# Process remote frames that have arrived
 	while transscenic.connection.get_available_packet_count() > 0:
 		var received_message = transscenic.connection.get_var();
+		# The following datatypes were sent at a previous stage.
+		# Such datagrams still coming in are to be discarded
 		if typeof(received_message) == TYPE_FLOAT:
+			continue;
+		if typeof(received_message) == TYPE_DICTIONARY && received_message.has("seed"):
 			continue;
 		# Process confirmations
 		for confirmation in received_message.confirmations:
@@ -164,13 +172,13 @@ func Integrate() -> void:
 	gamestate.remote_position = saved_gamestate.remote_position;
 	var integral : bool = true;
 	for i in range(latest_integral_frame, current_frame + 1):
-		Process_Frame(i);
 		if archive[i].remote.confirmed == false:
 			integral = false;
 		if integral:
 			latest_integral_frame = i;
 			saved_gamestate.local_position = gamestate.local_position;
 			saved_gamestate.remote_position = gamestate.remote_position;
+		Process_Frame(i);
 
 func End_Game(message : String):
 	transscenic.game_over_text = message;
